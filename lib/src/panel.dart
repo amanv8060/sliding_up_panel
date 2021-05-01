@@ -6,11 +6,12 @@ Copyright: © 2020, Akshath Jain. All rights reserved.
 Licensing: More information can be found here: https://github.com/akshathjain/sliding_up_panel/blob/master/LICENSE
 */
 
-import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'dart:math';
 
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
+import 'package:flutter/rendering.dart';
 
 enum SlideDirection {
   UP,
@@ -240,7 +241,30 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
     // draggable and panel scrolling is enabled
     _sc = new ScrollController();
     _sc.addListener(() {
-      if (widget.isDraggable && !_scrollingEnabled) _sc.jumpTo(0);
+      if (widget.isDraggable && !_scrollingEnabled) {
+        // While closing or opening the panel force the scroll position to remain at the end that makes the most sense
+        if (widget.slideDirection == SlideDirection.UP) {
+          if (_sc.position.axisDirection == AxisDirection.down) {
+            _sc.jumpTo(0);
+          } else if (_sc.position.axisDirection == AxisDirection.up) {
+            if (_sc.position.userScrollDirection == ScrollDirection.forward) {
+              _sc.jumpTo(0);
+            } else if (_sc.position.userScrollDirection == ScrollDirection.reverse) {
+              _sc.jumpTo(_sc.position.maxScrollExtent);
+            }
+          }
+        } else if (widget.slideDirection == SlideDirection.DOWN) {
+          if (_sc.position.axisDirection == AxisDirection.down) {
+            if (_sc.position.userScrollDirection == ScrollDirection.forward) {
+              _sc.jumpTo(0);
+            } else if (_sc.position.userScrollDirection == ScrollDirection.reverse) {
+              _sc.jumpTo(_sc.position.maxScrollExtent);
+            }
+          } else if (_sc.position.axisDirection == AxisDirection.up) {
+            _sc.jumpTo(0);
+          }
+        }
+      }
     });
 
     widget.controller?._addState(this);
@@ -467,25 +491,48 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
 
   // handles the sliding gesture
   void _onGestureSlide(double dy) {
+    if (_isPanelOpen && _sc.hasClients) {
+      if (_sc.offset <= 0) {
+        setState(() {
+          if (widget.slideDirection == SlideDirection.UP) {
+            if (_sc.position.axisDirection == AxisDirection.down) {
+              _scrollingEnabled = dy < 0;
+            } else if (_sc.position.axisDirection == AxisDirection.up) {
+              _scrollingEnabled = true;
+            }
+          } else if (widget.slideDirection == SlideDirection.DOWN) {
+            if (_sc.position.axisDirection == AxisDirection.down) {
+              _scrollingEnabled = true;
+            } else if (_sc.position.axisDirection == AxisDirection.up) {
+              _scrollingEnabled = dy > 0;
+            }
+          }
+        });
+      } else if (_sc.offset >= _sc.position.maxScrollExtent) {
+        setState(() {
+          if (widget.slideDirection == SlideDirection.UP) {
+            if (_sc.position.axisDirection == AxisDirection.down) {
+              _scrollingEnabled = true;
+            } else if (_sc.position.axisDirection == AxisDirection.up) {
+              _scrollingEnabled = dy < 0;
+            }
+          } else if (widget.slideDirection == SlideDirection.DOWN) {
+            if (_sc.position.axisDirection == AxisDirection.down) {
+              _scrollingEnabled = dy > 0;
+            } else if (_sc.position.axisDirection == AxisDirection.up) {
+              _scrollingEnabled = true;
+            }
+          }
+        });
+      }
+    }
+
     // only slide the panel if scrolling is not enabled
     if (!_scrollingEnabled) {
       if (widget.slideDirection == SlideDirection.UP)
         _ac.value -= dy / (widget.maxHeight - widget.minHeight);
       else
         _ac.value += dy / (widget.maxHeight - widget.minHeight);
-    }
-
-    // if the panel is open and the user hasn't scrolled, we need to determine
-    // whether to enable scrolling if the user swipes up, or disable closing and
-    // begin to close the panel if the user swipes down
-    if (_isPanelOpen && _sc.hasClients && _sc.offset <= 0) {
-      setState(() {
-        if (dy < 0) {
-          _scrollingEnabled = true;
-        } else {
-          _scrollingEnabled = false;
-        }
-      });
     }
   }
 
